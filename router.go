@@ -30,7 +30,10 @@ func NewRouter(pathPrefix string, middlewares ...func(http.Handler) http.Handler
 
 // joinPaths is a helper function to add a prefixPath (url path) to all routes
 func (r *Router) joinPaths(paths ...string) string {
-	combinedPath := []string{r.pathPrefix}
+	combinedPath := make([]string, 0)
+	if r.pathPrefix != "/" {
+		combinedPath = append(combinedPath, r.pathPrefix)
+	}
 	combinedPath = append(combinedPath, paths...)
 	return strings.Join(combinedPath, "/")
 }
