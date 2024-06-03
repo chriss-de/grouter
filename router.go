@@ -3,7 +3,6 @@ package grouter
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 )
@@ -31,11 +30,9 @@ func NewRouter(pathPrefix string, middlewares ...func(http.Handler) http.Handler
 
 // joinPaths is a helper function to add a prefixPath (url path) to all routes
 func (r *Router) joinPaths(paths ...string) string {
-	combinedPath, err := url.JoinPath(r.pathPrefix, paths...)
-	if err != nil {
-		panic(err)
-	}
-	return combinedPath
+	combinedPath := []string{r.pathPrefix}
+	combinedPath = append(combinedPath, paths...)
+	return strings.Join(combinedPath, "/")
 }
 
 // Any adds a route for ALL http methods to the Router and returns a route
