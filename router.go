@@ -17,7 +17,7 @@ type Router struct {
 	middlewares []func(http.Handler) http.Handler
 	routes      []*Route
 	muxOnce     sync.Once
-	mux         *http.ServeMux
+	mux         http.Handler
 }
 
 // NewRouter returns a new Router struct. you can add middlewares directly to this Router that will act globally (like logging, tracing)
@@ -84,9 +84,9 @@ func (r *Router) Head(path string) *Route {
 }
 
 // GetMux returns (and generates) the http.ServerMux from the routes in the Router
-func (r *Router) GetMux() *http.ServeMux {
+func (r *Router) GetMux() http.Handler {
 	r.muxOnce.Do(func() {
-		r.mux = http.NewServeMux()
+		mux := http.NewServeMux()
 		for _, rr := range r.routes {
 			if rr.handler == nil {
 				continue
@@ -94,19 +94,23 @@ func (r *Router) GetMux() *http.ServeMux {
 			// the handler from that route
 			h := rr.handler
 
-			// add all middlewares from the Router
-			for _, mw := range r.middlewares {
-				h = mw(h)
-			}
-
 			// add all middlewares from the route
 			for _, mw := range rr.middlewares {
 				h = mw(h)
 			}
 
 			// then add this all into our mux and let golang handle it
-			r.mux.Handle(strings.Trim(fmt.Sprintf("%s %s", rr.method, r.joinPaths(rr.path)), " "), h)
+			mux.Handle(strings.Trim(fmt.Sprintf("%s %s", rr.method, r.joinPaths(rr.path)), " "), h)
 		}
+
+		//
+		r.mux = mux
+
+		// add all middlewares from the Router
+		for _, mw := range r.middlewares {
+			r.mux = mw(r.mux)
+		}
+
 	})
 
 	return r.mux
