@@ -35,27 +35,16 @@ func NewRouter(pathPrefix string, middlewares ...func(http.Handler) http.Handler
 	}
 }
 
-//func (r *Router) assertRoute(route *Route) {
-//	if _, found := r.routes[route.id]; found {
-//		routeMethod := route.method
-//		if routeMethod == "" {
-//			routeMethod = "ANY"
-//		}
-//		panic(fmt.Sprintf("route for '%s:%s' already exists", routeMethod, route.path))
-//	}
-//}
-
-//func (r *Router) assertSubRouter(router *Router) {
-//	if _, found := r.subRouters[router.pathPrefix]; found {
-//		panic(fmt.Sprintf("router for '%s' already exists", router.pathPrefix))
-//	}
-//}
-
 // joinPaths is a helper function to add a prefixPath (url path) to all routes
-func (r *Router) joinPaths(paths ...string) string {
+func (r *Router) renderPath(paths ...string) string {
 	combinedPath := make([]string, 0)
-	if r.pathPrefix != "/" {
+	if r.pathPrefix == "/" {
+		combinedPath = append(combinedPath, "")
+	} else {
 		combinedPath = append(combinedPath, r.pathPrefix)
+	}
+	if len(paths) == 1 && paths[0] == "" {
+		paths = nil
 	}
 	combinedPath = append(combinedPath, paths...)
 	return strings.Join(combinedPath, "/")
@@ -69,13 +58,13 @@ func (r *Router) AddMiddlewares(middlewares ...func(http.Handler) http.Handler) 
 }
 
 func (r *Router) AddSubRouter(path string) *Router {
-	sr := NewRouter(r.joinPaths(r.pathPrefix, strings.TrimPrefix(path, "/")))
+	sr := NewRouter(r.renderPath(strings.TrimPrefix(path, "/")))
 	r.subRouters = append(r.subRouters, sr)
 	return sr
 }
 
 func (r *Router) AddRoute(path string, methods ...string) *Route {
-	route := newRoute(strings.TrimPrefix(path, "/"), methods...)
+	route := newRoute(r.renderPath(strings.TrimPrefix(path, "/")), methods...)
 	r.routes = append(r.routes, route)
 	return route
 }
@@ -114,46 +103,48 @@ func (r *Router) Head(path string) *Route {
 	return r.AddRoute(path, http.MethodHead)
 }
 
-// GetMux returns (and generates) the http.ServerMux from the routes in the Router
-func (r *Router) GetMux() http.Handler {
+func (r *Router) getServeMux(serveMux *http.ServeMux) {
+	// generate subRouters for router
+	for _, subRouter := range r.subRouters {
+		if subRouter == nil {
+			continue
+		}
+		subRouter.getServeMux(serveMux)
+	}
+
+	// generate route for router
+	for _, route := range r.routes {
+		if route.handler == nil {
+			continue
+		}
+		// the handler from that route
+		routeHandler := route.handler
+
+		// add all middlewares from the route
+		for _, routeMiddleware := range route.middlewares {
+			routeHandler = routeMiddleware(routeHandler)
+		}
+
+		// then add this all into our serveMux and let golang handle it
+		for _, routeMethod := range route.method {
+			serveMux.Handle(strings.Trim(fmt.Sprintf("%s %s", routeMethod, route.path), " "), routeHandler)
+		}
+	}
+
+	//
+	r.serveMux = serveMux
+
+	// add all middlewares from the Router
+	for _, routerMiddleware := range r.middlewares {
+		r.serveMux = routerMiddleware(r.serveMux)
+	}
+}
+
+// GetServeMux returns (and generates) the http.ServerMux from the routes in the Router
+func (r *Router) GetServeMux() http.Handler {
 	r.onceLock.Do(func() {
 		serveMux := http.NewServeMux()
-
-		// generate subRouters for router
-		for _, subRouter := range r.subRouters {
-			if subRouter == nil {
-				continue
-			}
-			subRouterServeMuxes := subRouter.GetMux()
-			// then add this all into our serveMux and let golang handle it
-			serveMux.Handle(subRouter.pathPrefix, subRouterServeMuxes)
-		}
-
-		// generate route for router
-		for _, route := range r.routes {
-			if route.handler == nil {
-				continue
-			}
-			// the handler from that route
-			routeHandler := route.handler
-
-			// add all middlewares from the route
-			for _, routeMiddleware := range route.middlewares {
-				routeHandler = routeMiddleware(routeHandler)
-			}
-
-			// then add this all into our serveMux and let golang handle it
-			serveMux.Handle(strings.Trim(fmt.Sprintf("%s %s", route.method, r.joinPaths(route.path)), " "), routeHandler)
-		}
-
-		//
-		r.serveMux = serveMux
-
-		// add all middlewares from the Router
-		for _, routerMiddleware := range r.middlewares {
-			r.serveMux = routerMiddleware(r.serveMux)
-		}
-
+		r.getServeMux(serveMux)
 	})
 
 	return r.serveMux
