@@ -59,6 +59,7 @@ func (r *Router) AddMiddlewares(middlewares ...func(http.Handler) http.Handler) 
 
 func (r *Router) AddSubRouter(path string) *Router {
 	sr := NewRouter(r.renderPath(strings.TrimPrefix(path, "/")))
+	sr.middlewares = append(sr.middlewares, r.middlewares...)
 	r.subRouters = append(r.subRouters, sr)
 	return sr
 }
@@ -104,14 +105,6 @@ func (r *Router) Head(path string) *Route {
 }
 
 func (r *Router) getServeMux(serveMux *http.ServeMux) {
-	// generate subRouters for router
-	for _, subRouter := range r.subRouters {
-		if subRouter == nil {
-			continue
-		}
-		subRouter.getServeMux(serveMux)
-	}
-
 	// generate route for router
 	for _, route := range r.routes {
 		if route.handler == nil {
@@ -121,22 +114,24 @@ func (r *Router) getServeMux(serveMux *http.ServeMux) {
 		routeHandler := route.handler
 
 		// add all middlewares from the route
-		for _, routeMiddleware := range route.middlewares {
-			routeHandler = routeMiddleware(routeHandler)
+		for idx := len(route.middlewares) - 1; idx >= 0; idx-- {
+			routeHandler = route.middlewares[idx](routeHandler)
 		}
-
+		// add all middlewares from the Router
+		for idx := len(r.middlewares) - 1; idx >= 0; idx-- {
+			routeHandler = r.middlewares[idx](routeHandler)
+		}
 		// then add this all into our serveMux and let golang handle it
 		for _, routeMethod := range route.method {
 			serveMux.Handle(strings.Trim(fmt.Sprintf("%s %s", routeMethod, route.path), " "), routeHandler)
 		}
 	}
-
-	//
-	r.serveMux = serveMux
-
-	// add all middlewares from the Router
-	for _, routerMiddleware := range r.middlewares {
-		r.serveMux = routerMiddleware(r.serveMux)
+	// generate subRouters for router
+	for _, subRouter := range r.subRouters {
+		if subRouter == nil {
+			continue
+		}
+		subRouter.getServeMux(serveMux)
 	}
 }
 
@@ -145,6 +140,7 @@ func (r *Router) GetServeMux() http.Handler {
 	r.onceLock.Do(func() {
 		serveMux := http.NewServeMux()
 		r.getServeMux(serveMux)
+		r.serveMux = serveMux
 	})
 
 	return r.serveMux
