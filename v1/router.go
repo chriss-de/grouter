@@ -23,6 +23,10 @@ type Router struct {
 
 // NewRouter returns a new Router struct. you can add middlewares directly to this Router that will act globally (like logging, tracing)
 func NewRouter(pathPrefix string, middlewares ...func(http.Handler) http.Handler) *Router {
+	if pathPrefix == "" {
+		pathPrefix = "/"
+	}
+
 	return &Router{
 		pathPrefix:  pathPrefix,
 		middlewares: middlewares,
@@ -65,13 +69,13 @@ func (r *Router) AddMiddlewares(middlewares ...func(http.Handler) http.Handler) 
 }
 
 func (r *Router) AddSubRouter(path string) *Router {
-	sr := NewRouter(r.joinPaths(r.pathPrefix, path))
+	sr := NewRouter(r.joinPaths(r.pathPrefix, strings.TrimPrefix(path, "/")))
 	r.subRouters = append(r.subRouters, sr)
 	return sr
 }
 
 func (r *Router) AddRoute(path string, methods ...string) *Route {
-	route := newRoute(path, methods...)
+	route := newRoute(strings.TrimPrefix(path, "/"), methods...)
 	r.routes = append(r.routes, route)
 	return route
 }
