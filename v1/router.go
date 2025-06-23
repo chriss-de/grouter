@@ -8,8 +8,8 @@ import (
 )
 
 // router is for syntactic sugary
-// It allows for more readable http.Server serveMux routes as in router.HTTP_METHOD(PATH).Do(HANDLER).with(MIDDLEWARE)
-// At the end we get a http.ServeMux
+// It allows for more readable http.Server serveMux routes as in router.HTTP_METHOD(PATH).With(MIDDLEWARE).Do(HANDLER)
+// At the end we get an http.ServeMux
 
 // Router holds all middlewares and routes. it is used to generate a http.ServeMux
 type Router struct {
@@ -133,6 +133,16 @@ func (r *Router) getServeMux(serveMux *http.ServeMux) {
 		}
 		subRouter.getServeMux(serveMux)
 	}
+}
+
+// ServeHTTP to implement the http.Handler interface
+func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	r.onceLock.Do(func() {
+		serveMux := http.NewServeMux()
+		r.getServeMux(serveMux)
+		r.serveMux = serveMux
+	})
+	r.serveMux.ServeHTTP(rw, req)
 }
 
 // GetServeMux returns (and generates) the http.ServerMux from the routes in the Router
