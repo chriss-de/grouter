@@ -6,7 +6,7 @@ It is intended to be used with golang 1.23+ and net/http server mux.
 # Usage
 
 ```go
-    import "github.com/chriss-de/grouter"
+    import "github.com/chriss-de/grouter/v2"
 
     // base_url of your API/webapp ist https://domain/url
     router := grouter.NewRouter("/url")
@@ -45,7 +45,7 @@ This will result in following routes in the mux
 You can add any middleware. You can add them to the router or to any route.
 
 ```go
-    import "github.com/chriss-de/grouter"
+    import "github.com/chriss-de/grouter/v2"
 
     // base_url of your API/webapp ist https://domain/url
     router := grouter.NewRouter("/url", middlewares.MW1, middlewares.MW2)
