@@ -1,3 +1,3 @@
-module github.com/chriss-de/grouter
+module github.com/chriss-de/grouter/v2
 
-go 1.22.3
+go 1.24

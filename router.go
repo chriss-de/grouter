@@ -1,7 +1,6 @@
 package grouter
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -64,47 +63,27 @@ func (r *Router) AddSubRouter(path string) *Router {
 	return sr
 }
 
+// AddRoute adds a route to a router. A path and a list of HTTP methods/verbs
 func (r *Router) AddRoute(path string, methods ...string) *Route {
 	route := newRoute(r.renderPath(strings.TrimPrefix(path, "/")), methods...)
 	r.routes = append(r.routes, route)
 	return route
 }
 
-func (r *Router) Any(path string) *Route {
-	return r.AddRoute(path, "")
-}
+func (r *Router) Any(path string) *Route     { return r.AddRoute(path, "") }
+func (r *Router) Get(path string) *Route     { return r.AddRoute(path, http.MethodGet) }
+func (r *Router) Post(path string) *Route    { return r.AddRoute(path, http.MethodPost) }
+func (r *Router) Delete(path string) *Route  { return r.AddRoute(path, http.MethodDelete) }
+func (r *Router) Put(path string) *Route     { return r.AddRoute(path, http.MethodPut) }
+func (r *Router) Patch(path string) *Route   { return r.AddRoute(path, http.MethodPatch) }
+func (r *Router) Head(path string) *Route    { return r.AddRoute(path, http.MethodHead) }
+func (r *Router) Options(path string) *Route { return r.AddRoute(path, http.MethodOptions) }
 
 func (r *Router) GetHead(path string) *Route {
 	return r.AddRoute(path, http.MethodGet, http.MethodHead)
 }
 
-// Get adds a route for GET http methods to the Router and returns a route
-func (r *Router) Get(path string) *Route {
-	return r.AddRoute(path, http.MethodGet)
-}
-
-// Post adds a route for POST http methods to the Router and returns a route
-func (r *Router) Post(path string) *Route {
-	return r.AddRoute(path, http.MethodPost)
-}
-
-func (r *Router) Delete(path string) *Route {
-	return r.AddRoute(path, http.MethodDelete)
-}
-
-func (r *Router) Put(path string) *Route {
-	return r.AddRoute(path, http.MethodPut)
-}
-
-func (r *Router) Patch(path string) *Route {
-	return r.AddRoute(path, http.MethodPatch)
-}
-
-func (r *Router) Head(path string) *Route {
-	return r.AddRoute(path, http.MethodHead)
-}
-
-func (r *Router) getServeMux(serveMux *http.ServeMux) {
+func (r *Router) generateMux(serveMux *http.ServeMux) {
 	// generate route for router
 	for _, route := range r.routes {
 		if route.handler == nil {
@@ -122,8 +101,8 @@ func (r *Router) getServeMux(serveMux *http.ServeMux) {
 			routeHandler = r.middlewares[idx](routeHandler)
 		}
 		// then add this all into our serveMux and let golang handle it
-		for _, routeMethod := range route.method {
-			serveMux.Handle(strings.Trim(fmt.Sprintf("%s %s", routeMethod, route.path), " "), routeHandler)
+		for _, routeMethod := range route.methods {
+			serveMux.Handle(strings.Trim(routeMethod+" "+route.path, " "), routeHandler)
 		}
 	}
 	// generate subRouters for router
@@ -131,7 +110,7 @@ func (r *Router) getServeMux(serveMux *http.ServeMux) {
 		if subRouter == nil {
 			continue
 		}
-		subRouter.getServeMux(serveMux)
+		subRouter.generateMux(serveMux)
 	}
 }
 
@@ -139,7 +118,7 @@ func (r *Router) getServeMux(serveMux *http.ServeMux) {
 func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	r.onceLock.Do(func() {
 		serveMux := http.NewServeMux()
-		r.getServeMux(serveMux)
+		r.generateMux(serveMux)
 		r.serveMux = serveMux
 	})
 	r.serveMux.ServeHTTP(rw, req)
@@ -149,7 +128,7 @@ func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 func (r *Router) GetServeMux() http.Handler {
 	r.onceLock.Do(func() {
 		serveMux := http.NewServeMux()
-		r.getServeMux(serveMux)
+		r.generateMux(serveMux)
 		r.serveMux = serveMux
 	})
 
